@@ -4662,6 +4662,8 @@ static int rocksdb_init_func(void *const p) {
                           cf_names.size());
 
   std::vector<rocksdb::ColumnFamilyDescriptor> cf_descr;
+  std::vector<rocksdb::titandb::TitanCFDescriptor> titan_cf_descr;
+
   std::vector<rocksdb::ColumnFamilyHandle *> cf_handles;
 
   rocksdb_tbl_options->index_type =
@@ -4760,17 +4762,17 @@ static int rocksdb_init_func(void *const p) {
     cf_descr.push_back(rocksdb::ColumnFamilyDescriptor(cf_names[i], opts));
   }
 
-  rocksdb::Options main_opts(*rocksdb_db_options,
-                             cf_options_map->get_defaults());
+  rocksdb::Options __main_opts(*rocksdb_db_options, cf_options_map->get_defaults());
+  rocksdb::titandb::TitanOptions main_opts(__main_opts);
 
   rocksdb::TransactionDBOptions tx_db_options;
   tx_db_options.transaction_lock_timeout = 2000;  // 2 seconds
   tx_db_options.custom_mutex_factory = std::make_shared<Rdb_mutex_factory>();
   tx_db_options.write_policy =
       static_cast<rocksdb::TxnDBWritePolicy>(rocksdb_write_policy);
-
+  
   status =
-      check_rocksdb_options_compatibility(rocksdb_datadir, main_opts, cf_descr);
+      check_rocksdb_options_compatibility(rocksdb_datadir, __main_opts, cf_descr);
 
   // We won't start if we'll determine that there's a chance of data corruption
   // because of incompatible options.
@@ -4781,8 +4783,16 @@ static int rocksdb_init_func(void *const p) {
     DBUG_RETURN(HA_EXIT_FAILURE);
   }
 
-  status = rocksdb::TransactionDB::Open(
-      main_opts, tx_db_options, rocksdb_datadir, cf_descr, &cf_handles, &rdb);
+  //  status = rocksdb::TransactionDB::Open(main_opts, tx_db_options, rocksdb_datadir, cf_descr, &cf_handles, &rdb);
+
+  for (auto c: cf_descr) {
+    rocksdb::titandb::TitanCFOptions titan_cf_cfg(c.options);
+    titan_cf_cfg.min_blob_size = 0;
+    rocksdb::titandb::TitanCFDescriptor t(c.name, titan_cf_cfg);
+    titan_cf_descr.push_back(t);
+  }
+
+  status = rocksdb::TransactionDB::OpenTitanDB(main_opts, tx_db_options, rocksdb_datadir, titan_cf_descr, &cf_handles, &rdb);
 
   if (!status.ok()) {
     rdb_log_status_error(status, "Error opening instance");
