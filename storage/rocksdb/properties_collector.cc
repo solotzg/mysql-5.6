@@ -165,6 +165,7 @@ void Rdb_tbl_prop_coll::CollectStatsForRow(const rocksdb::Slice &key,
     stats->m_entry_others++;
     break;
   default:
+    return;
     // NO_LINT_DEBUG
     sql_print_error("RocksDB: Unexpected entry type found: %u. "
                     "This should not happen so aborting the system.",
